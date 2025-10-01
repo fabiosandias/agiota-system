@@ -47,6 +47,7 @@ Deliver a single-user loan management system that centralizes client records, lo
 - Automatic compound interest calculation at each due date.
 - Dashboard metrics and charts for upcoming, closed, profit, and loss views.
 - Financial reports (loan extract, cash flow) with CSV and PDF exports.
+- Company cash account management with running balance, ledger de entradas/saídas e vínculo com cada empréstimo/pagamento.
 - Activity logging for critical operations (loan creation, updates, deletes, auth events).
 
 ### 4.2 Optional / Stretch Goals
@@ -79,7 +80,8 @@ Deliver a single-user loan management system that centralizes client records, lo
 ### 5.3 UX Guidelines
 - Responsive design targeting desktop first, with tablet/mobile support.
 - Use Tailwind + ShadCN UI for consistent component styling.
-- Provide inline validation and feedback for required fields.
+- Provide inline validation and feedback for required fields using React Hook Form + Yup schemas.
+- Apply input masking for monetary values, CPF, and phone numbers to reduce data entry errors.
 - Show status chips for loan states (active, overdue, paid, renegotiated).
 
 ## 6. Functional Requirements
@@ -109,9 +111,9 @@ Deliver a single-user loan management system that centralizes client records, lo
 - **LOAN-6:** Support renegotiation by creating a new schedule or updating terms while logging history.
 
 ### 6.5 Payments & Tracking (PAY)
-- **PAY-1:** Record payments associated with a loan, capturing amount, date, and method.
-- **PAY-2:** Update loan status to paid when payments cover principal + interest.
-- **PAY-3:** Flag loans as overdue when current date > due date and outstanding balance > 0.
+- **PAY-1:** Record payments associated with a loan, capturing amount, date, method, tipo (parcial, integral, parcela) e componentes de principal/juros.
+- **PAY-2:** Update loan status to paid when payments cover principal + interest, considerando quitações parciais e vínculo com parcelas previstas.
+- **PAY-3:** Flag loans/parcelas as overdue when current date > due date and outstanding balance > 0.
 - **PAY-4:** Allow marking a loan as loss (write-off) with recorded reason.
 
 ### 6.6 Reports (REP)
@@ -125,6 +127,8 @@ Deliver a single-user loan management system that centralizes client records, lo
 
 ## 7. Business Rules and Calculations
 - **BR-1:** Compound interest is applied only on each due date. New balance = prior balance * (1 + rate).
+- **BR-6:** Cada liberação de empréstimo debita a conta da empresa e gera lançamento em ledger; pagamentos (parciais ou totais) creditam a conta de acordo com os componentes de principal/juros.
+- **BR-7:** Parcelas podem ser geradas mensalmente, suportando pagamentos parciais; o sistema recalcula juros compostos sobre o saldo devedor restante.
 - **BR-2:** Administrator can configure interest rate per loan; defaults may be provided by the system configuration.
 - **BR-3:** Loan statuses: `active`, `due soon`, `overdue`, `paid`, `renegotiated`, `written_off`.
 - **BR-4:** Overdue loans contribute to losses until payment received or written off.
@@ -134,14 +138,24 @@ Deliver a single-user loan management system that centralizes client records, lo
 ### 8.1 Entities
 - **users**: id, email, password_hash, name, created_at, updated_at.
 - **clients**: id, name, cpf, phone, email, address, created_at, updated_at.
-- **loans**: id, client_id, principal_amount, interest_rate, due_date, status, notes, created_at, updated_at.
-- **payments**: id, loan_id, amount, payment_date, method, created_at.
+- **loans**: id, client_id, account_id, principal_amount, interest_rate, due_date, status, notes, created_at, updated_at.
+- **accounts**: id, name, initial_balance, current_balance, created_at, updated_at.
+- **loan_installments**: id, loan_id, sequence, due_date, principal_due, interest_due, total_due, paid_amount, status, created_at, updated_at.
+- **installment_payments**: id, installment_id, payment_id, amount, created_at.
+- **account_transactions**: id, account_id, loan_id?, payment_id?, direction (debit/credit), amount, occurred_at, description, created_at.
+- **payments**: id, loan_id, account_id, amount, payment_date, method, type, principal_component, interest_component, installment_number, created_at.
 - **logs**: id, actor_id, action, entity_type, entity_id, payload, created_at.
 
 ### 8.2 Relationships
 - `users` (1) — (N) `logs`
+- `accounts` (1) — (N) `loans`
+- `accounts` (1) — (N) `payments`
+- `accounts` (1) — (N) `account_transactions`
 - `clients` (1) — (N) `loans`
 - `loans` (1) — (N) `payments`
+- `loans` (1) — (N) `loan_installments`
+- `loan_installments` (1) — (N) `installment_payments`
+- `payments` (1) — (N) `installment_payments`
 
 ## 9. API Surface
 - `POST /auth/login`
@@ -172,6 +186,7 @@ Deliver a single-user loan management system that centralizes client records, lo
 - TailwindCSS + ShadCN UI component library
 - TanStack Query for data fetching and caching
 - React Router for navigation
+- React Hook Form + Yup for form state, validation, and schema enforcement
 - JWT handled via httpOnly cookies; use protected routes on the client
 
 ### 10.2 Backend

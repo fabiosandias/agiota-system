@@ -1,0 +1,71 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:16
+    container_name: agiota-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: agiota_admin
+      POSTGRES_PASSWORD: agiota_pass
+      POSTGRES_DB: agiota_db
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agiota_admin -d agiota_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: ./apps/backend/Dockerfile
+    container_name: agiota-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://agiota_admin:agiota_pass@db:5432/agiota_db?schema=public
+      PORT: 3333
+    ports:
+      - "3333:3333"
+    command: sh -c "npm run prisma:generate && npm run prisma:migrate && npm run seed && npm run start:prod"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./apps/frontend/Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3333/api
+    container_name: agiota-frontend
+    depends_on:
+      - backend
+    env_file:
+      - ./.env
+    environment:
+      VITE_API_URL: http://localhost:3333/api
+    ports:
+      - "5173:5173"
+
+  studio:
+    build:
+      context: .
+      dockerfile: ./apps/backend/Dockerfile
+    container_name: agiota-studio
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://agiota_admin:agiota_pass@db:5432/agiota_db?schema=public
+    command: sh -c "npm run prisma:generate && npx prisma studio --schema ../../db/prisma/schema.prisma --hostname 0.0.0.0 --port 5555"
+    ports:
+      - "5555:5555"
+
+volumes:
+  db-data:

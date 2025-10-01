@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LoanStatus {
+  active
+  due_soon
+  overdue
+  paid
+  renegotiated
+  written_off
+}
+
+enum InstallmentStatus {
+  pending
+  partial
+  paid
+  overdue
+}
+
+enum PaymentType {
+  lump_sum
+  partial
+  installment
+}
+
+enum TransactionDirection {
+  debit
+  credit
+}
+
+model User {
+  id           String   @id @default(uuid()) @map("id")
+  email        String   @unique @map("email")
+  name         String   @map("name")
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  logs         Log[]
+  resetTokens  PasswordResetToken[]
+
+  @@map("users")
+}
+
+model Account {
+  id              String               @id @default(uuid()) @map("id")
+  name            String               @map("name")
+  initialBalance  Decimal              @default(0) @map("initial_balance")
+  currentBalance  Decimal              @default(0) @map("current_balance")
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  loans           Loan[]
+  transactions    AccountTransaction[]
+  payments        Payment[]
+
+  @@map("accounts")
+}
+
+model Client {
+  id        String   @id @default(uuid()) @map("id")
+  name      String   @map("name")
+  cpf       String   @unique @map("cpf")
+  phone     String?  @map("phone")
+  email     String?  @map("email")
+  address   String?  @map("address")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  loans     Loan[]
+
+  @@map("clients")
+}
+
+model Loan {
+  id              String              @id @default(uuid()) @map("id")
+  clientId        String              @map("client_id")
+  accountId       String              @map("account_id")
+  principalAmount Decimal             @map("principal_amount")
+  interestRate    Decimal             @map("interest_rate")
+  dueDate         DateTime            @map("due_date")
+  status          LoanStatus          @default(active) @map("status")
+  notes           String?             @map("notes")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  client          Client              @relation(fields: [clientId], references: [id])
+  account         Account             @relation(fields: [accountId], references: [id])
+  payments        Payment[]
+  installments    LoanInstallment[]
+  transactions    AccountTransaction[]
+
+  @@index([clientId], map: "loans_client_id_idx")
+  @@index([accountId], map: "loans_account_id_idx")
+  @@map("loans")
+}
+
+model LoanInstallment {
+  id               String             @id @default(uuid()) @map("id")
+  loanId           String             @map("loan_id")
+  sequence         Int                @map("sequence")
+  dueDate          DateTime           @map("due_date")
+  principalDue     Decimal            @map("principal_due")
+  interestDue      Decimal            @map("interest_due")
+  totalDue         Decimal            @map("total_due")
+  paidAmount       Decimal            @default(0) @map("paid_amount")
+  status           InstallmentStatus  @default(pending) @map("status")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  loan             Loan               @relation(fields: [loanId], references: [id])
+  payments         InstallmentPayment[]
+
+  @@unique([loanId, sequence], map: "loan_installments_loan_id_sequence_key")
+  @@index([loanId], map: "loan_installments_loan_id_idx")
+  @@map("loan_installments")
+}
+
+model InstallmentPayment {
+  id            String           @id @default(uuid()) @map("id")
+  installmentId String           @map("installment_id")
+  paymentId     String           @map("payment_id")
+  amount        Decimal          @map("amount")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  installment   LoanInstallment  @relation(fields: [installmentId], references: [id])
+  payment       Payment          @relation(fields: [paymentId], references: [id])
+
+  @@unique([installmentId, paymentId], map: "installment_payments_installment_payment_key")
+  @@index([paymentId], map: "installment_payments_payment_id_idx")
+  @@map("installment_payments")
+}
+
+model Payment {
+  id                 String               @id @default(uuid()) @map("id")
+  loanId             String               @map("loan_id")
+  accountId          String               @map("account_id")
+  amount             Decimal              @map("amount")
+  paymentDate        DateTime             @map("payment_date")
+  method             String?              @map("method")
+  type               PaymentType          @default(partial) @map("type")
+  principalComponent Decimal?             @map("principal_component")
+  interestComponent  Decimal?             @map("interest_component")
+  installmentNumber  Int?                 @map("installment_number")
+  createdAt          DateTime             @default(now()) @map("created_at")
+  loan               Loan                 @relation(fields: [loanId], references: [id])
+  account            Account              @relation(fields: [accountId], references: [id])
+  installmentLinks   InstallmentPayment[]
+  transactions       AccountTransaction[]
+
+  @@index([loanId], map: "payments_loan_id_idx")
+  @@index([accountId], map: "payments_account_id_idx")
+  @@map("payments")
+}
+
+model AccountTransaction {
+  id          String                @id @default(uuid()) @map("id")
+  accountId   String                @map("account_id")
+  loanId      String?               @map("loan_id")
+  paymentId   String?               @map("payment_id")
+  direction   TransactionDirection  @map("direction")
+  amount      Decimal               @map("amount")
+  description String?               @map("description")
+  occurredAt  DateTime              @default(now()) @map("occurred_at")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  account     Account               @relation(fields: [accountId], references: [id])
+  loan        Loan?                 @relation(fields: [loanId], references: [id])
+  payment     Payment?              @relation(fields: [paymentId], references: [id])
+
+  @@index([accountId], map: "account_transactions_account_id_idx")
+  @@index([loanId], map: "account_transactions_loan_id_idx")
+  @@index([paymentId], map: "account_transactions_payment_id_idx")
+  @@map("account_transactions")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false) @map("used")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "password_reset_tokens_user_id_idx")
+  @@map("password_reset_tokens")
+}
+
+model Log {
+  id        String   @id @default(uuid()) @map("id")
+  actorId   String?  @map("actor_id")
+  action    String   @map("action")
+  entity    String?  @map("entity_type")
+  entityId  String?  @map("entity_id")
+  payload   Json?    @map("payload")
+  createdAt DateTime @default(now()) @map("created_at")
+  actor     User?    @relation(fields: [actorId], references: [id])
+
+  @@index([actorId], map: "logs_actor_id_idx")
+  @@map("logs")
+}

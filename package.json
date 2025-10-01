@@ -1,0 +1,23 @@
+{
+  "name": "agiota-system",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev:backend": "npm --workspace apps/backend run dev",
+    "dev:frontend": "npm --workspace apps/frontend run dev",
+    "dev": "concurrently -n backend,frontend \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "build": "npm run build -w apps/backend && npm run build -w apps/frontend",
+    "lint": "npm run lint -w apps/backend && npm run lint -w apps/frontend",
+    "prisma:migrate": "npm --workspace apps/backend run prisma:migrate",
+    "prisma:generate": "npm --workspace apps/backend run prisma:generate",
+    "seed": "npm --workspace apps/backend run seed"
+  },
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  }
+}
