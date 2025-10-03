@@ -8,8 +8,11 @@ import DepositPage from '../pages/DepositPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import ProfilePage from '../pages/ProfilePage';
+import UsersPage from '../pages/UsersPage';
+import AccountsPage from '../pages/AccountsPage';
 import LoadingScreen from '../components/LoadingScreen';
 import Layout from '../components/Layout';
+import RoleGuard from '../components/RoleGuard';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedLayout = () => {
@@ -51,9 +54,39 @@ const AppRoutes = () => {
       children: [
         { path: '/', element: <DashboardPage /> },
         { path: '/loans', element: <LoansPage /> },
-        { path: '/loans/new', element: <NewLoanPage /> },
+        {
+          path: '/loans/new',
+          element: (
+            <RoleGuard allowedRoles={['admin', 'operator']}>
+              <NewLoanPage />
+            </RoleGuard>
+          )
+        },
         { path: '/clients', element: <ClientsPage /> },
-        { path: '/accounts/deposit', element: <DepositPage /> },
+        {
+          path: '/accounts',
+          element: (
+            <RoleGuard allowedRoles={['admin', 'operator']}>
+              <AccountsPage />
+            </RoleGuard>
+          )
+        },
+        {
+          path: '/accounts/deposit',
+          element: (
+            <RoleGuard allowedRoles={['admin', 'operator']}>
+              <DepositPage />
+            </RoleGuard>
+          )
+        },
+        {
+          path: '/admin/users',
+          element: (
+            <RoleGuard allowedRoles={['admin']}>
+              <UsersPage />
+            </RoleGuard>
+          )
+        },
         { path: '/profile', element: <ProfilePage /> }
       ]
     },

@@ -1,10 +1,13 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import createHttpError from 'http-errors';
-import { authService } from '../services/auth.service.js';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { authService } from '../services/auth.service.js';
 
 const router = Router();
+
+const ACCESS_TOKEN_MAX_AGE = 1000 * 60 * 15; // 15 minutos
+const computeRefreshMaxAge = (expiresAt: Date) => Math.max(expiresAt.getTime() - Date.now(), 0);
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -25,16 +28,10 @@ router.post('/login', async (req, res, next) => {
     const payload = loginSchema.parse(req.body);
     const result = await authService.login(payload.email, payload.password);
 
-    res.cookie('token', result.token, {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 12
-    });
-
     res.status(200).json({
       success: true,
-      token: result.token,
+      token: result.accessToken,
+      refreshToken: result.refreshToken,
       user: result.user
     });
   } catch (error) {
@@ -46,9 +43,16 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-router.post('/logout', requireAuth, (req, res) => {
-  res.clearCookie('token');
-  res.status(204).send();
+router.post('/logout', requireAuth, async (req, res, next) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
+    await authService.logout(req.user!.sub, refreshToken);
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get('/me', requireAuth, async (req, res, next) => {
@@ -56,6 +60,40 @@ router.get('/me', requireAuth, async (req, res, next) => {
     const user = await authService.getCurrentUser(req.user!.sub);
     res.json({ success: true, data: user });
   } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
+
+    if (!refreshToken) {
+      throw createHttpError(401, 'Refresh token ausente');
+    }
+
+    const result = await authService.refreshSession(refreshToken);
+
+    res.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: ACCESS_TOKEN_MAX_AGE,
+      path: '/'
+    });
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: computeRefreshMaxAge(result.refreshTokenExpiresAt),
+      path: '/'
+    });
+
+    res.json({ success: true, user: result.user });
+  } catch (error) {
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
     next(error);
   }
 });

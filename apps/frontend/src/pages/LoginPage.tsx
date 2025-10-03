@@ -50,8 +50,8 @@ const LoginPage = () => {
       <div className="absolute right-6 top-6"><ThemeToggle /></div>
       <div className="w-full max-w-md space-y-10">
         <div className="text-center text-slate-700 dark:text-slate-200">
-          <h1 className="text-3xl font-bold tracking-tight text-blue-700 dark:text-blue-400">Agiota System</h1>
-          <p className="mt-3 text-sm">Gerencie seus empréstimos com uma experiência moderna e segura.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-blue-700 dark:text-blue-400">AITRON Financeira</h1>
+          <p className="mt-3 text-sm">Gestão completa de crédito com transparência e controle em tempo real.</p>
         </div>
         <form
           onSubmit={onSubmit}

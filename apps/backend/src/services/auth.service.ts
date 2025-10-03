@@ -1,10 +1,55 @@
-import createHttpError from 'http-errors';
 import crypto from 'node:crypto';
-import { prisma } from '../config/prisma.js';
-import { comparePassword, hashPassword } from '../utils/password.js';
-import { signToken } from '../utils/jwt.js';
+import createHttpError from 'http-errors';
 import { env } from '../config/env.js';
+import { prisma } from '../config/prisma.js';
+import { signToken } from '../utils/jwt.js';
+import { comparePassword, hashPassword } from '../utils/password.js';
 import { mailService } from './mail.service.js';
+
+const ACCESS_TOKEN_EXPIRATION = '15m';
+const REFRESH_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 dias
+
+const hashRefreshToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
+const issueRefreshToken = async (userId: string, options: { invalidateExisting?: boolean } = {}) => {
+  if (options.invalidateExisting) {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+  }
+
+  const rawToken = crypto.randomBytes(64).toString('hex');
+  const tokenHash = hashRefreshToken(rawToken);
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+
+  await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash,
+      expiresAt
+    }
+  });
+
+  return { token: rawToken, expiresAt };
+};
+
+const buildAuthUserResponse = (user: {
+  id: string;
+  email: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  role: 'admin' | 'operator' | 'viewer';
+  avatar: string | null;
+}) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  phone: user.phone,
+  role: user.role,
+  avatar: user.avatar
+});
 
 const login = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({
@@ -21,18 +66,24 @@ const login = async (email: string, password: string) => {
     throw createHttpError(401, 'Invalid email or password');
   }
 
-  const token = signToken({
-    sub: user.id,
-    email: user.email
+  const accessToken = signToken(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role
+    },
+    ACCESS_TOKEN_EXPIRATION
+  );
+
+  const { token: refreshToken, expiresAt: refreshTokenExpiresAt } = await issueRefreshToken(user.id, {
+    invalidateExisting: true
   });
 
   return {
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name
-    }
+    accessToken,
+    refreshToken,
+    refreshTokenExpiresAt,
+    user: buildAuthUserResponse(user)
   };
 };
 
@@ -42,9 +93,15 @@ const getCurrentUser = async (userId: string) => {
     select: {
       id: true,
       name: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
       email: true,
+      avatar: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      address: true
     }
   });
 
@@ -53,6 +110,51 @@ const getCurrentUser = async (userId: string) => {
   }
 
   return user;
+};
+
+const refreshSession = async (refreshToken: string) => {
+  const tokenHash = hashRefreshToken(refreshToken);
+
+  const storedToken = await prisma.refreshToken.findUnique({ where: { tokenHash } });
+
+  if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
+    throw createHttpError(401, 'Refresh token inválido ou expirado');
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: storedToken.userId } });
+
+  if (!user) {
+    throw createHttpError(401, 'Usuário não encontrado');
+  }
+
+  await prisma.refreshToken.delete({ where: { tokenHash } });
+
+  const accessToken = signToken(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role
+    },
+    ACCESS_TOKEN_EXPIRATION
+  );
+
+  const { token: newRefreshToken, expiresAt: refreshTokenExpiresAt } = await issueRefreshToken(user.id);
+
+  return {
+    accessToken,
+    refreshToken: newRefreshToken,
+    refreshTokenExpiresAt,
+    user: buildAuthUserResponse(user)
+  };
+};
+
+const logout = async (userId: string, refreshToken?: string) => {
+  if (refreshToken) {
+    const tokenHash = hashRefreshToken(refreshToken);
+    await prisma.refreshToken.deleteMany({ where: { tokenHash } });
+  } else {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+  }
 };
 
 const PASSWORD_RESET_EXPIRATION_MINUTES = 60;
@@ -85,9 +187,10 @@ const requestPasswordReset = async (email: string) => {
 
   const resetLink = `${env.APP_URL}/reset-password?token=${rawToken}`;
 
+  const displayName = user.firstName ?? user.name ?? user.email;
   const html = `
-    <p>Olá, ${user.name}!</p>
-    <p>Recebemos uma solicitação para redefinir sua senha no <strong>Agiota System</strong>.</p>
+    <p>Olá, ${displayName}!</p>
+    <p>Recebemos uma solicitação para redefinir sua senha na <strong>AITRON Financeira</strong>.</p>
     <p>Clique no botão abaixo para criar uma nova senha. O link expira em ${PASSWORD_RESET_EXPIRATION_MINUTES} minutos.</p>
     <p><a href="${resetLink}" style="display:inline-block;padding:12px 20px;background:#1d4ed8;color:#fff;text-decoration:none;border-radius:6px">Redefinir senha</a></p>
     <p>Se você não solicitou, ignore este e-mail.</p>
@@ -95,7 +198,7 @@ const requestPasswordReset = async (email: string) => {
 
   await mailService.sendMail({
     to: user.email,
-    subject: 'Recuperação de senha - Agiota System',
+    subject: 'Recuperação de senha - AITRON Financeira',
     html,
     text: `Para redefinir sua senha acesse: ${resetLink}`
   });
@@ -129,6 +232,8 @@ const resetPassword = async (token: string, newPassword: string) => {
 export const authService = {
   login,
   getCurrentUser,
+  refreshSession,
+  logout,
   requestPasswordReset,
   resetPassword
 };

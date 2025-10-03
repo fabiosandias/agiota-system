@@ -1,11 +1,12 @@
 import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
 import { env } from '../config/env.js';
 
-const DEFAULT_EXPIRATION = '12h';
+const DEFAULT_EXPIRATION = '15m';
 
 export interface JwtPayload {
   sub: string;
   email: string;
+  role: 'admin' | 'operator' | 'viewer';
 }
 
 const secret: Secret = env.JWT_SECRET;

@@ -1,6 +1,6 @@
-import { config } from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from 'dotenv';
 import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);

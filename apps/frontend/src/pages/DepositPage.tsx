@@ -21,7 +21,7 @@ interface DepositFormValues {
 }
 
 const schema = yup.object({
-  accountId: yup.string().uuid('Selecione uma conta válida').required('Conta é obrigatória'),
+  accountId: yup.string().required('Selecione uma conta'),
   amount: yup.number().positive('Informe um valor maior que zero').required('Valor é obrigatório'),
   description: yup.string().nullable()
 });
@@ -56,12 +56,6 @@ const DepositPage = () => {
     }
   });
 
-  useEffect(() => {
-    if (accounts.length > 0) {
-      setValue('accountId', accounts[0].id);
-    }
-  }, [accounts, setValue]);
-
   const onSubmit = handleSubmit(async (values) => {
     setSuccessMessage(null);
 
@@ -71,6 +65,7 @@ const DepositPage = () => {
     });
 
     await queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    await queryClient.invalidateQueries({ queryKey: ['total-balance'] });
     setSuccessMessage('Depósito realizado com sucesso!');
     reset({ accountId: values.accountId, amount: 0, description: '' });
   });
@@ -181,13 +176,13 @@ const DepositPage = () => {
                   <tr key={account.id} className="bg-white dark:bg-slate-900">
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{account.name}</td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
-                      {Number(account.currentBalance).toLocaleString('pt-BR', {
+                      {(Number(account.currentBalance) || 0).toLocaleString('pt-BR', {
                         style: 'currency',
                         currency: 'BRL'
                       })}
                     </td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
-                      {Number(account.initialBalance).toLocaleString('pt-BR', {
+                      {(Number(account.initialBalance) || 0).toLocaleString('pt-BR', {
                         style: 'currency',
                         currency: 'BRL'
                       })}

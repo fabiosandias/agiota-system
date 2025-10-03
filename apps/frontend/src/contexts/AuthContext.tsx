@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, setUnauthorizedHandler, TOKEN_STORAGE_KEY } from '../lib/api';
+import { api, setUnauthorizedHandler, setToken, removeToken, getToken } from '../lib/api';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -8,8 +8,22 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  role?: 'admin' | 'operator' | 'viewer';
+  avatar?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  address?: {
+    postalCode: string | null;
+    street: string | null;
+    number: string | null;
+    district: string | null;
+    city: string | null;
+    state: string | null;
+    complement?: string | null;
+  } | null;
 }
 
 interface SignInInput {
@@ -29,7 +43,6 @@ interface ChangePasswordInput {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  token: string | null;
   isInitializing: boolean;
   isAuthenticating: boolean;
   signIn: (input: SignInInput) => Promise<void>;
@@ -42,7 +55,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const THEME_STORAGE_KEY = 'agiota-system.theme';
+const THEME_STORAGE_KEY = 'aitron-financeira.theme';
 
 const resolveInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') return 'light';
@@ -57,10 +70,6 @@ const resolveInitialTheme = (): ThemeMode => {
 export const AuthProvider = ({ children }: PropsWithChildren) => {
   const navigate = useNavigate();
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-  });
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(resolveInitialTheme);
@@ -80,16 +89,8 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
   }, [theme]);
 
   useEffect(() => {
-    const clearSession = () => {
-      setToken(null);
-      setUser(null);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
-    };
-
     setUnauthorizedHandler(() => {
-      clearSession();
+      setUser(null);
       navigate('/login');
     });
 
@@ -100,6 +101,7 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {
     const loadProfile = async () => {
+      const token = getToken();
       if (!token) {
         setIsInitializing(false);
         return;
@@ -109,17 +111,15 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
         const { data } = await api.get<{ success: boolean; data: AuthUser }>('/auth/me');
         setUser(data.data);
       } catch (error) {
-        if (typeof window !== 'undefined') {
-          window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        }
-        setToken(null);
+        setUser(null);
+        removeToken();
       } finally {
         setIsInitializing(false);
       }
     };
 
     void loadProfile();
-  }, [token]);
+  }, []);
 
   const signIn = async (input: SignInInput) => {
     setIsAuthenticating(true);
@@ -127,9 +127,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
       const { data } = await api.post<{ success: boolean; token: string; user: AuthUser }>('/auth/login', input);
       setToken(data.token);
       setUser(data.user);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-      }
     } finally {
       setIsAuthenticating(false);
     }
@@ -141,11 +138,8 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     } catch (error) {
       // Ignorar erros de logout para garantir que sessão seja encerrada
     } finally {
-      setToken(null);
+      removeToken();
       setUser(null);
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
       navigate('/login');
     }
   };
@@ -168,7 +162,6 @@ export const AuthProvider = ({ children }: PropsWithChildren) => {
     <AuthContext.Provider
       value={{
         user,
-        token,
         isInitializing,
         isAuthenticating,
         signIn,

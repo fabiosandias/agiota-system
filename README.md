@@ -1,6 +1,6 @@
-# Agiota System
+# AITRON Financeira
 
-Single-user loan management platform featuring React 19 + Tailwind frontend, Express/Prisma backend, and PostgreSQL database. This repository is organised as a monorepo (`apps/frontend`, `apps/backend`) and ships with Docker tooling for an end-to-end experience.
+AI-powered loan management platform featuring React 19 + Tailwind frontend, Express/Prisma backend, and PostgreSQL database. This repository is organised as a monorepo (`apps/frontend`, `apps/backend`) and ships with Docker tooling for an end-to-end experience.
 
 ## 1. Requisitos
 
@@ -48,8 +48,8 @@ Single-user loan management platform featuring React 19 + Tailwind frontend, Exp
 
 ## 4. Credenciais padrão
 
-- Email: `admin@agiota.local`
-- Password: `Agiota@123`
+- Email: `admin@aitron.finance`
+- Password: `Aitron@123`
 
 ## 5. Comandos úteis
 

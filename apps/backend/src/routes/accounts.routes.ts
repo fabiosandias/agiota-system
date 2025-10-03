@@ -1,8 +1,8 @@
-import { Router } from 'express';
-import { prisma } from '../config/prisma.js';
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
+import { Router } from 'express';
 import createHttpError from 'http-errors';
+import { z } from 'zod';
+import { prisma } from '../config/prisma.js';
 
 const router = Router();
 

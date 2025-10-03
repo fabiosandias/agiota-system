@@ -1,10 +1,18 @@
 import axios from 'axios';
 
-export const TOKEN_STORAGE_KEY = 'agiota-system.token';
+const TOKEN_KEY = 'aitron_token';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? '/api',
-  withCredentials: true
+  baseURL: import.meta.env.VITE_API_URL ?? '/api'
+});
+
+// Interceptor para adicionar token em todas as requisições
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 let unauthorizedHandler: (() => void) | null = null;
@@ -13,27 +21,31 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   unauthorizedHandler = handler;
 };
 
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    const token = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (token) {
-      config.headers = config.headers ?? {};
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
-
-  return config;
-});
-
+// Interceptor de resposta para tratar 401
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401 && unauthorizedHandler) {
+  async (error) => {
+    const { response } = error;
+
+    if (response?.status === 401 && unauthorizedHandler) {
+      localStorage.removeItem(TOKEN_KEY);
       unauthorizedHandler();
     }
 
     return Promise.reject(error);
   }
 );
+
+export const setToken = (token: string) => {
+  localStorage.setItem(TOKEN_KEY, token);
+};
+
+export const removeToken = () => {
+  localStorage.removeItem(TOKEN_KEY);
+};
+
+export const getToken = () => {
+  return localStorage.getItem(TOKEN_KEY);
+};
 
 export { api };

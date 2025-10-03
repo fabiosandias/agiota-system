@@ -9,8 +9,11 @@ import DepositPage from '../pages/DepositPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import ProfilePage from '../pages/ProfilePage';
+import UsersPage from '../pages/UsersPage';
+import AccountsPage from '../pages/AccountsPage';
 import LoadingScreen from '../components/LoadingScreen';
 import Layout from '../components/Layout';
+import RoleGuard from '../components/RoleGuard';
 import { useAuth } from '../contexts/AuthContext';
 const ProtectedLayout = () => {
     const { user, isInitializing } = useAuth();
@@ -39,9 +42,23 @@ const AppRoutes = () => {
             children: [
                 { path: '/', element: _jsx(DashboardPage, {}) },
                 { path: '/loans', element: _jsx(LoansPage, {}) },
-                { path: '/loans/new', element: _jsx(NewLoanPage, {}) },
+                {
+                    path: '/loans/new',
+                    element: (_jsx(RoleGuard, { allowedRoles: ['admin', 'operator'], children: _jsx(NewLoanPage, {}) }))
+                },
                 { path: '/clients', element: _jsx(ClientsPage, {}) },
-                { path: '/accounts/deposit', element: _jsx(DepositPage, {}) },
+                {
+                    path: '/accounts',
+                    element: (_jsx(RoleGuard, { allowedRoles: ['admin', 'operator'], children: _jsx(AccountsPage, {}) }))
+                },
+                {
+                    path: '/accounts/deposit',
+                    element: (_jsx(RoleGuard, { allowedRoles: ['admin', 'operator'], children: _jsx(DepositPage, {}) }))
+                },
+                {
+                    path: '/admin/users',
+                    element: (_jsx(RoleGuard, { allowedRoles: ['admin'], children: _jsx(UsersPage, {}) }))
+                },
                 { path: '/profile', element: _jsx(ProfilePage, {}) }
             ]
         },

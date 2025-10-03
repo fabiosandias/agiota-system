@@ -1,9 +1,9 @@
 import { jsx as _jsx } from "react/jsx-runtime";
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, setUnauthorizedHandler, TOKEN_STORAGE_KEY } from '../lib/api';
+import { api, setUnauthorizedHandler, setToken, removeToken, getToken } from '../lib/api';
 const AuthContext = createContext(undefined);
-const THEME_STORAGE_KEY = 'agiota-system.theme';
+const THEME_STORAGE_KEY = 'aitron-financeira.theme';
 const resolveInitialTheme = () => {
     if (typeof window === 'undefined')
         return 'light';
@@ -17,11 +17,6 @@ const resolveInitialTheme = () => {
 export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(() => {
-        if (typeof window === 'undefined')
-            return null;
-        return window.localStorage.getItem(TOKEN_STORAGE_KEY);
-    });
     const [isInitializing, setIsInitializing] = useState(true);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [theme, setTheme] = useState(resolveInitialTheme);
@@ -38,15 +33,8 @@ export const AuthProvider = ({ children }) => {
         applyTheme(theme);
     }, [theme]);
     useEffect(() => {
-        const clearSession = () => {
-            setToken(null);
-            setUser(null);
-            if (typeof window !== 'undefined') {
-                window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-            }
-        };
         setUnauthorizedHandler(() => {
-            clearSession();
+            setUser(null);
             navigate('/login');
         });
         return () => {
@@ -55,6 +43,7 @@ export const AuthProvider = ({ children }) => {
     }, [navigate]);
     useEffect(() => {
         const loadProfile = async () => {
+            const token = getToken();
             if (!token) {
                 setIsInitializing(false);
                 return;
@@ -64,26 +53,21 @@ export const AuthProvider = ({ children }) => {
                 setUser(data.data);
             }
             catch (error) {
-                if (typeof window !== 'undefined') {
-                    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-                }
-                setToken(null);
+                setUser(null);
+                removeToken();
             }
             finally {
                 setIsInitializing(false);
             }
         };
         void loadProfile();
-    }, [token]);
+    }, []);
     const signIn = async (input) => {
         setIsAuthenticating(true);
         try {
             const { data } = await api.post('/auth/login', input);
             setToken(data.token);
             setUser(data.user);
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-            }
         }
         finally {
             setIsAuthenticating(false);
@@ -97,11 +81,8 @@ export const AuthProvider = ({ children }) => {
             // Ignorar erros de logout para garantir que sessão seja encerrada
         }
         finally {
-            setToken(null);
+            removeToken();
             setUser(null);
-            if (typeof window !== 'undefined') {
-                window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-            }
             navigate('/login');
         }
     };
@@ -118,7 +99,6 @@ export const AuthProvider = ({ children }) => {
     };
     return (_jsx(AuthContext.Provider, { value: {
             user,
-            token,
             isInitializing,
             isAuthenticating,
             signIn,

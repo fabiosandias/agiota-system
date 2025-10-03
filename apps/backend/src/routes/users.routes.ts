@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import createHttpError from 'http-errors';
-import { userService } from '../services/user.service.js';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { userService } from '../services/user.service.js';
 
 const router = Router();
 

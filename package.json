@@ -1,5 +1,5 @@
 {
-  "name": "agiota-system",
+  "name": "aitron-financeira",
   "private": true,
   "version": "0.1.0",
   "scripts": {
@@ -8,6 +8,9 @@
     "dev": "concurrently -n backend,frontend \"npm:dev:backend\" \"npm:dev:frontend\"",
     "build": "npm run build -w apps/backend && npm run build -w apps/frontend",
     "lint": "npm run lint -w apps/backend && npm run lint -w apps/frontend",
+    "lint:fix": "npm run lint:fix -w apps/backend && npm run lint:fix -w apps/frontend",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "prisma:migrate": "npm --workspace apps/backend run prisma:migrate",
     "prisma:generate": "npm --workspace apps/backend run prisma:generate",
     "seed": "npm --workspace apps/backend run seed"
@@ -18,6 +21,13 @@
   ],
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2",
+    "prisma": "^5.22.0",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
   }
 }
