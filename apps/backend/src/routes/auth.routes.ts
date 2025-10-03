@@ -2,6 +2,7 @@ import { Router } from 'express';
 import createHttpError from 'http-errors';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { authRateLimiter } from '../middleware/rate-limit.js';
 import { authService } from '../services/auth.service.js';
 
 const router = Router();
@@ -23,7 +24,7 @@ const resetPasswordSchema = z.object({
   password: z.string().min(6)
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', authRateLimiter, async (req, res, next) => {
   try {
     const payload = loginSchema.parse(req.body);
     const result = await authService.login(payload.email, payload.password);
