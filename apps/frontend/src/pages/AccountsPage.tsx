@@ -4,6 +4,8 @@ import { isAxiosError } from 'axios';
 import AccountForm, { type AccountFormValues, type AccountType } from '../components/forms/AccountForm';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 
 interface Account {
   id: string;
@@ -55,6 +57,7 @@ const toAccountFormDefaults = (account: Account): Partial<AccountFormValues> => 
 
 const AccountsPage = () => {
   const queryClient = useQueryClient();
+  const { showBalance } = useBalanceVisibility();
   const [searchTerm, setSearchTerm] = useState('');
   const [pendingSearch, setPendingSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | AccountType>('all');
@@ -364,7 +367,7 @@ const AccountsPage = () => {
                         {account.type === 'checking' ? 'Conta corrente' : 'Conta poupança'}
                       </td>
                       <td className="px-4 py-3 text-right text-slate-500 dark:text-slate-300">
-                        {currency.format(Number(account.currentBalance))}
+                        {formatCurrencyWithPrivacy(Number(account.currentBalance), showBalance)}
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-300">{new Date(account.createdAt).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-300">

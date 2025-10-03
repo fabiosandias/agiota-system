@@ -5,6 +5,8 @@ import * as yup from 'yup';
 import { NumericFormat } from 'react-number-format';
 import { api } from '../lib/api';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 
 type Account = {
   id: string;
@@ -28,6 +30,7 @@ const schema = yup.object({
 
 const DepositPage = () => {
   const queryClient = useQueryClient();
+  const { showBalance } = useBalanceVisibility();
   const { data: accountsResponse } = useQuery<{ success: boolean; data: Account[] }>({
     queryKey: ['accounts'],
     queryFn: async () => {
@@ -176,16 +179,10 @@ const DepositPage = () => {
                   <tr key={account.id} className="bg-white dark:bg-slate-900">
                     <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{account.name}</td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
-                      {(Number(account.currentBalance) || 0).toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL'
-                      })}
+                      {formatCurrencyWithPrivacy(Number(account.currentBalance) || 0, showBalance)}
                     </td>
                     <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
-                      {(Number(account.initialBalance) || 0).toLocaleString('pt-BR', {
-                        style: 'currency',
-                        currency: 'BRL'
-                      })}
+                      {formatCurrencyWithPrivacy(Number(account.initialBalance) || 0, showBalance)}
                     </td>
                   </tr>
                 ))

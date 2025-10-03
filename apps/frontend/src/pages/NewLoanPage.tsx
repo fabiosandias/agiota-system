@@ -6,6 +6,8 @@ import * as yup from 'yup';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { api } from '../lib/api';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 
 interface Client {
   id: string;
@@ -55,6 +57,7 @@ const schema = yup.object({
 
 const NewLoanPage = () => {
   const navigate = useNavigate();
+  const { showBalance } = useBalanceVisibility();
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -163,7 +166,7 @@ const NewLoanPage = () => {
               <select {...register('accountId')} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">
                 <option value="">Selecione uma conta</option>
                 {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>{account.name} (Saldo: {currency.format(Number(account.currentBalance))})</option>
+                  <option key={account.id} value={account.id}>{account.name} (Saldo: {formatCurrencyWithPrivacy(Number(account.currentBalance), showBalance)})</option>
                 ))}
               </select>
               {errors.accountId && <span className="mt-1 text-xs text-red-500">{errors.accountId.message}</span>}
@@ -205,15 +208,15 @@ const NewLoanPage = () => {
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm text-blue-700 dark:text-blue-300">Valor Principal</p>
-              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{currency.format(principalAmount)}</p>
+              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{formatCurrencyWithPrivacy(principalAmount, showBalance)}</p>
             </div>
             <div>
               <p className="text-sm text-blue-700 dark:text-blue-300">Valor Total (com juros)</p>
-              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{currency.format(totalAmount)}</p>
+              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{formatCurrencyWithPrivacy(totalAmount, showBalance)}</p>
             </div>
             <div>
               <p className="text-sm text-blue-700 dark:text-blue-300">Valor da Parcela</p>
-              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{currency.format(installmentAmount)}</p>
+              <p className="text-xl font-bold text-blue-900 dark:text-blue-100">{formatCurrencyWithPrivacy(installmentAmount, showBalance)}</p>
             </div>
           </div>
         </section>

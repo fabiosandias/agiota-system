@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 
 interface LoanSummary {
   id: string;
@@ -14,6 +16,7 @@ interface AccountSummary {
 }
 
 const DashboardPage = () => {
+  const { showBalance } = useBalanceVisibility();
   const { data: loansData, isLoading: loadingLoans } = useQuery<{ success: boolean; data: LoanSummary[] }>({
     queryKey: ['loans'],
     queryFn: async () => {
@@ -63,12 +66,7 @@ const DashboardPage = () => {
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
           <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Saldo disponível</span>
           <p className="mt-4 text-3xl font-semibold text-slate-900 dark:text-slate-50">
-            {loadingAccounts
-              ? '...'
-              : availableBalance.toLocaleString('pt-BR', {
-                  style: 'currency',
-                  currency: 'BRL'
-                })}
+            {loadingAccounts ? '...' : formatCurrencyWithPrivacy(availableBalance, showBalance)}
           </p>
         </div>
       </section>
@@ -76,9 +74,7 @@ const DashboardPage = () => {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Movimentação de caixa</h2>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Total liberado em empréstimos: {loadingLoans
-            ? '...'
-            : totalPrincipal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          Total liberado em empréstimos: {loadingLoans ? '...' : formatCurrencyWithPrivacy(totalPrincipal, showBalance)}
         </p>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           Esse painel exibirá gráficos assim que as transações estiverem disponíveis na API.
@@ -99,10 +95,7 @@ const DashboardPage = () => {
               <div key={account.id} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm transition dark:border-slate-700 dark:bg-slate-950/50">
                 <span className="font-medium text-slate-600 dark:text-slate-300">{account.name}</span>
                 <span className="text-slate-900 dark:text-slate-100">
-                  {Number(account.currentBalance).toLocaleString('pt-BR', {
-                    style: 'currency',
-                    currency: 'BRL'
-                  })}
+                  {formatCurrencyWithPrivacy(Number(account.currentBalance), showBalance)}
                 </span>
               </div>
             ))

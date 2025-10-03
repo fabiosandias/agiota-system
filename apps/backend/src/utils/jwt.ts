@@ -6,7 +6,7 @@ const DEFAULT_EXPIRATION = '15m';
 export interface JwtPayload {
   sub: string;
   email: string;
-  role: 'admin' | 'operator' | 'viewer';
+  role: 'super_admin' | 'admin' | 'operator' | 'viewer';
 }
 
 const secret: Secret = env.JWT_SECRET;

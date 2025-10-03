@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import createHttpError from 'http-errors';
 
-type AllowedRoles = Array<'admin' | 'operator' | 'viewer'>;
+type AllowedRoles = Array<'super_admin' | 'admin' | 'operator' | 'viewer'>;
 
 export const authorize =
   (...allowedRoles: AllowedRoles): RequestHandler =>
@@ -10,6 +10,11 @@ export const authorize =
 
     if (!role) {
       return next(createHttpError(401, 'Autenticação necessária'));
+    }
+
+    // Super admin tem acesso a tudo
+    if (role === 'super_admin') {
+      return next();
     }
 
     if (!allowedRoles.includes(role)) {

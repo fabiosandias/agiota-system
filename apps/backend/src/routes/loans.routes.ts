@@ -35,6 +35,11 @@ router.post('/', async (req, res, next) => {
   try {
     const payload = loanSchema.parse(req.body);
 
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
+    const tenantId = req.tenantId;
     const accountId = payload.accountId ?? DEFAULT_ACCOUNT_ID;
 
     const account = await prisma.account.findUnique({ where: { id: accountId } });
@@ -46,8 +51,10 @@ router.post('/', async (req, res, next) => {
     const loan = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const createdLoan = await tx.loan.create({
         data: {
+          tenantId,
           clientId: payload.clientId,
           accountId,
+          createdByUserId: req.user?.sub ?? null,
           principalAmount: payload.principalAmount,
           interestRate: payload.interestRate,
           dueDate: payload.dueDate,

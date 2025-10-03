@@ -12,12 +12,13 @@ router.get('/', authorize('admin', 'operator', 'viewer'), async (req, res, next)
   try {
     const filters = accountQuerySchema.parse(req.query);
     const { page, pageSize } = parsePagination(req.query);
-    const userId = req.user!.sub;
+
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
 
     const conditions: Prisma.AccountWhereInput[] = [
-      {
-        OR: [{ userId }, { userId: null }]
-      }
+      { tenantId: req.tenantId }
     ];
 
     if (filters.type) {
@@ -57,8 +58,13 @@ router.post('/', authorize('admin', 'operator'), async (req, res, next) => {
   try {
     const payload = accountInputSchema.parse(req.body);
 
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
     const account = await prisma.account.create({
       data: {
+        tenantId: req.tenantId,
         userId: req.user?.sub ?? null,
         name: payload.name,
         bankName: payload.bankName,

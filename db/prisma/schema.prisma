@@ -45,55 +45,147 @@ enum AccountType {
 }
 
 enum UserRole {
+  super_admin
   admin
   operator
   viewer
 }
 
-model User {
-  id           String               @id @default(uuid()) @map("id")
-  email        String               @unique @map("email")
-  name         String               @map("name")
-  firstName    String?              @map("first_name")
-  lastName     String?              @map("last_name")
-  phone        String?              @map("phone")
-  role         UserRole             @default(operator) @map("role")
-  passwordHash String               @map("password_hash")
-  avatar       String?              @map("avatar") @db.Text
-  createdAt    DateTime             @default(now()) @map("created_at")
-  updatedAt    DateTime             @updatedAt @map("updated_at")
-  address      Address?             @relation("UserAddress")
-  accounts     Account[]
-  logs         Log[]
-  resetTokens  PasswordResetToken[]
-  refreshTokens RefreshToken[]
+enum TenantPlan {
+  free
+  pro
+}
 
+enum TenantStatus {
+  active
+  past_due
+  suspended
+  canceled
+}
+
+enum BillingMethod {
+  pix
+  credit_card
+}
+
+enum InvoiceStatus {
+  open
+  paid
+  overdue
+  canceled
+}
+
+enum SubscriptionEventType {
+  trial_started
+  trial_ended
+  payment_succeeded
+  payment_failed
+  account_suspended
+  account_reactivated
+  plan_upgraded
+  plan_downgraded
+}
+
+enum TicketType {
+  financeiro
+  tecnico
+  duvida
+  outro
+}
+
+enum TicketStatus {
+  aberto
+  em_andamento
+  resolvido
+  fechado
+}
+
+model Tenant {
+  id            String         @id @default(uuid()) @map("id")
+  name          String         @map("name")
+  email         String         @unique @map("email")
+  cpfCnpj       String?        @map("cpf_cnpj")
+  phone         String?        @map("phone")
+  addressId     String?        @unique @map("address_id")
+  plan          TenantPlan     @default(free) @map("plan")
+  status        TenantStatus   @default(active) @map("status")
+  trialStartAt  DateTime?      @map("trial_start_at")
+  trialEndAt    DateTime?      @map("trial_end_at")
+  nextDueAt     DateTime?      @map("next_due_at")
+  billingMethod BillingMethod? @map("billing_method")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  address              Address?              @relation("TenantAddress", fields: [addressId], references: [id])
+  users                User[]
+  clients              Client[]
+  accounts             Account[]
+  loans                Loan[]
+  subscriptionInvoices SubscriptionInvoice[]
+  subscriptionEvents   SubscriptionEvent[]
+  tickets              Ticket[]
+  ticketMessages       TicketMessage[]
+
+  @@index([email], map: "tenants_email_idx")
+  @@index([status], map: "tenants_status_idx")
+  @@map("tenants")
+}
+
+model User {
+  id           String   @id @default(uuid()) @map("id")
+  tenantId     String?  @map("tenant_id")
+  email        String   @unique @map("email")
+  name         String   @map("name")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?  @map("phone")
+  role         UserRole @default(operator) @map("role")
+  passwordHash String   @map("password_hash")
+  avatar       String?  @map("avatar") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant?              @relation(fields: [tenantId], references: [id])
+  address       Address?             @relation("UserAddress")
+  accounts      Account[]
+  logs          Log[]
+  resetTokens   PasswordResetToken[]
+  refreshTokens RefreshToken[]
+  createdLoans  Loan[]               @relation("LoanCreator")
+  tickets       Ticket[]
+
+  @@index([tenantId], map: "users_tenant_id_idx")
   @@map("users")
 }
 
 model Account {
-  id             String               @id @default(uuid()) @map("id")
-  userId         String?              @map("user_id")
-  name           String               @map("name")
-  bankName       String?              @map("bank_name")
-  branch         String?              @map("branch")
-  accountNumber  String?              @map("account_number")
-  type           AccountType          @default(checking) @map("type")
-  openingBalance Decimal              @default(0) @map("opening_balance")
-  currentBalance Decimal              @default(0) @map("current_balance")
-  createdAt      DateTime             @default(now()) @map("created_at")
-  updatedAt      DateTime             @updatedAt @map("updated_at")
-  user           User?                @relation(fields: [userId], references: [id])
-  loans          Loan[]
-  transactions   AccountTransaction[]
-  payments       Payment[]
+  id             String      @id @default(uuid()) @map("id")
+  tenantId       String      @map("tenant_id")
+  userId         String?     @map("user_id")
+  name           String      @map("name")
+  bankName       String?     @map("bank_name")
+  branch         String?     @map("branch")
+  accountNumber  String?     @map("account_number")
+  type           AccountType @default(checking) @map("type")
+  openingBalance Decimal     @default(0) @map("opening_balance")
+  currentBalance Decimal     @default(0) @map("current_balance")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  user         User?                @relation(fields: [userId], references: [id])
+  loans        Loan[]
+  transactions AccountTransaction[]
+  payments     Payment[]
+
+  @@index([tenantId], map: "accounts_tenant_id_idx")
   @@index([userId], map: "accounts_user_id_idx")
   @@map("accounts")
 }
 
 model Client {
   id           String        @id @default(uuid()) @map("id")
+  tenantId     String        @map("tenant_id")
   name         String        @map("name")
   firstName    String?       @map("first_name")
   lastName     String?       @map("last_name")
@@ -104,9 +196,12 @@ model Client {
   email        String?       @map("email")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
-  loans        Loan[]
-  addresses    Address[]     @relation("ClientAddresses")
 
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  loans     Loan[]
+  addresses Address[] @relation("ClientAddresses")
+
+  @@index([tenantId], map: "clients_tenant_id_idx")
   @@index([document], map: "clients_document_idx")
   @@map("clients")
 }
@@ -125,8 +220,10 @@ model Address {
   userId     String?  @unique @map("user_id")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
-  client     Client?  @relation("ClientAddresses", fields: [clientId], references: [id])
-  user       User?    @relation("UserAddress", fields: [userId], references: [id])
+
+  tenant Tenant? @relation("TenantAddress")
+  client Client? @relation("ClientAddresses", fields: [clientId], references: [id])
+  user   User?   @relation("UserAddress", fields: [userId], references: [id])
 
   @@index([city], map: "addresses_city_idx")
   @@index([postalCode], map: "addresses_postal_code_idx")
@@ -134,24 +231,31 @@ model Address {
 }
 
 model Loan {
-  id              String               @id @default(uuid()) @map("id")
-  clientId        String               @map("client_id")
-  accountId       String               @map("account_id")
-  principalAmount Decimal              @map("principal_amount")
-  interestRate    Decimal              @map("interest_rate")
-  dueDate         DateTime             @map("due_date")
-  status          LoanStatus           @default(active) @map("status")
-  notes           String?              @map("notes")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-  client          Client               @relation(fields: [clientId], references: [id])
-  account         Account              @relation(fields: [accountId], references: [id])
-  payments        Payment[]
-  installments    LoanInstallment[]
-  transactions    AccountTransaction[]
+  id              String     @id @default(uuid()) @map("id")
+  tenantId        String     @map("tenant_id")
+  clientId        String     @map("client_id")
+  accountId       String     @map("account_id")
+  createdByUserId String?    @map("created_by_user_id")
+  principalAmount Decimal    @map("principal_amount")
+  interestRate    Decimal    @map("interest_rate")
+  dueDate         DateTime   @map("due_date")
+  status          LoanStatus @default(active) @map("status")
+  notes           String?    @map("notes")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
+  tenant       Tenant               @relation(fields: [tenantId], references: [id])
+  client       Client               @relation(fields: [clientId], references: [id])
+  account      Account              @relation(fields: [accountId], references: [id])
+  createdBy    User?                @relation("LoanCreator", fields: [createdByUserId], references: [id])
+  payments     Payment[]
+  installments LoanInstallment[]
+  transactions AccountTransaction[]
+
+  @@index([tenantId], map: "loans_tenant_id_idx")
   @@index([clientId], map: "loans_client_id_idx")
   @@index([accountId], map: "loans_account_id_idx")
+  @@index([createdByUserId], map: "loans_created_by_user_id_idx")
   @@map("loans")
 }
 
@@ -245,13 +349,13 @@ model PasswordResetToken {
 }
 
 model RefreshToken {
-  id         String   @id @default(uuid()) @map("id")
-  userId     String   @map("user_id")
-  tokenHash  String   @unique @map("token_hash")
-  expiresAt  DateTime @map("expires_at")
-  revokedAt  DateTime? @map("revoked_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  user       User     @relation(fields: [userId], references: [id])
+  id        String    @id @default(uuid()) @map("id")
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId], map: "refresh_tokens_user_id_idx")
   @@map("refresh_tokens")
@@ -269,4 +373,78 @@ model Log {
 
   @@index([actorId], map: "logs_actor_id_idx")
   @@map("logs")
+}
+
+model SubscriptionInvoice {
+  id          String         @id @default(uuid()) @map("id")
+  tenantId    String         @map("tenant_id")
+  periodStart DateTime       @map("period_start")
+  periodEnd   DateTime       @map("period_end")
+  amount      Decimal        @map("amount")
+  status      InvoiceStatus  @default(open) @map("status")
+  dueDate     DateTime       @map("due_date")
+  paidAt      DateTime?      @map("paid_at")
+  method      BillingMethod? @map("method")
+  gatewayRef  String?        @map("gateway_ref")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId], map: "subscription_invoices_tenant_id_idx")
+  @@index([status], map: "subscription_invoices_status_idx")
+  @@index([dueDate], map: "subscription_invoices_due_date_idx")
+  @@map("subscription_invoices")
+}
+
+model SubscriptionEvent {
+  id        String                @id @default(uuid()) @map("id")
+  tenantId  String                @map("tenant_id")
+  type      SubscriptionEventType @map("type")
+  data      Json?                 @map("data")
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId], map: "subscription_events_tenant_id_idx")
+  @@index([type], map: "subscription_events_type_idx")
+  @@map("subscription_events")
+}
+
+model Ticket {
+  id          String       @id @default(uuid()) @map("id")
+  tenantId    String       @map("tenant_id")
+  userId      String       @map("user_id")
+  subject     String       @map("subject")
+  type        TicketType   @map("type")
+  description String       @map("description") @db.Text
+  status      TicketStatus @default(aberto) @map("status")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  messages TicketMessage[]
+
+  @@index([tenantId], map: "tickets_tenant_id_idx")
+  @@index([userId], map: "tickets_user_id_idx")
+  @@index([status], map: "tickets_status_idx")
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(uuid()) @map("id")
+  ticketId  String   @map("ticket_id")
+  tenantId  String   @map("tenant_id")
+  authorId  String?  @map("author_id")
+  message   String   @map("message") @db.Text
+  isStaff   Boolean  @default(false) @map("is_staff")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([ticketId], map: "ticket_messages_ticket_id_idx")
+  @@index([tenantId], map: "ticket_messages_tenant_id_idx")
+  @@map("ticket_messages")
 }

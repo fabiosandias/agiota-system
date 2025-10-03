@@ -14,7 +14,13 @@ router.get('/', authorize('admin', 'operator', 'viewer'), async (req, res, next)
     const filters = loanQuerySchema.parse(req.query);
     const { page, pageSize } = parsePagination(req.query);
 
-    const conditions: Prisma.LoanWhereInput[] = [];
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
+    const conditions: Prisma.LoanWhereInput[] = [
+      { tenantId: req.tenantId }
+    ];
 
     if (filters.status) {
       conditions.push({ status: filters.status as LoanStatus });
@@ -35,7 +41,7 @@ router.get('/', authorize('admin', 'operator', 'viewer'), async (req, res, next)
       });
     }
 
-    const where = conditions.length > 0 ? { AND: conditions } : {};
+    const where = conditions.length === 1 ? conditions[0] : { AND: conditions };
 
     const [total, loans] = await prisma.$transaction([
       prisma.loan.count({ where }),
@@ -124,6 +130,12 @@ router.post('/', authorize('admin', 'operator'), async (req, res, next) => {
   try {
     const payload = loanInputSchema.parse(req.body);
 
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
+    const tenantId = req.tenantId;
+
     // Verificar se cliente existe
     const client = await prisma.client.findUnique({ where: { id: payload.clientId } });
     if (!client) {
@@ -149,8 +161,10 @@ router.post('/', authorize('admin', 'operator'), async (req, res, next) => {
       // Criar empréstimo
       const newLoan = await tx.loan.create({
         data: {
+          tenantId,
           clientId: payload.clientId,
           accountId: payload.accountId,
+          createdByUserId: req.user?.sub ?? null,
           principalAmount: payload.principalAmount,
           interestRate: payload.interestRate,
           dueDate: new Date(payload.dueDate),

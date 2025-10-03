@@ -15,6 +15,15 @@ import Layout from '../components/Layout';
 import RoleGuard from '../components/RoleGuard';
 import { useAuth } from '../contexts/AuthContext';
 
+// Admin imports
+import { AdminLoginPage } from '../pages/admin/AdminLoginPage';
+import { AdminDashboard } from '../pages/admin/AdminDashboard';
+import { TenantsPage } from '../pages/admin/TenantsPage';
+import { TenantDetailPage } from '../pages/admin/TenantDetailPage';
+import { TicketsPage } from '../pages/admin/TicketsPage';
+import { AdminLayout } from '../components/admin/AdminLayout';
+import { useAdminAuth } from '../contexts/AdminAuthContext';
+
 const ProtectedLayout = () => {
   const { user, isInitializing } = useAuth();
 
@@ -47,8 +56,53 @@ const GuestLayout = () => {
   return <Outlet />;
 };
 
+const AdminProtectedLayout = () => {
+  const { user, loading } = useAdminAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!user) {
+    return <Navigate to="/admin/login" replace />;
+  }
+
+  return <AdminLayout />;
+};
+
+const AdminGuestLayout = () => {
+  const { user, loading } = useAdminAuth();
+
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  if (user) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <Outlet />;
+};
+
 const AppRoutes = () => {
   return useRoutes([
+    // Admin routes (Super Admin)
+    {
+      element: <AdminProtectedLayout />,
+      children: [
+        { path: '/admin', element: <AdminDashboard /> },
+        { path: '/admin/tenants', element: <TenantsPage /> },
+        { path: '/admin/tenants/:id', element: <TenantDetailPage /> },
+        { path: '/admin/tickets', element: <TicketsPage /> },
+      ]
+    },
+    {
+      element: <AdminGuestLayout />,
+      children: [
+        { path: '/admin/login', element: <AdminLoginPage /> }
+      ]
+    },
+    // Tenant routes
     {
       element: <ProtectedLayout />,
       children: [

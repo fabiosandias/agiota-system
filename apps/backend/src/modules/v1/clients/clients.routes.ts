@@ -16,7 +16,13 @@ router.get('/', authorize('admin', 'operator', 'viewer'), async (req, res, next)
     const { search, name, district, city } = clientQuerySchema.parse(req.query);
     const { page, pageSize } = parsePagination(req.query);
 
-    const conditions: Prisma.ClientWhereInput[] = [];
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
+    const conditions: Prisma.ClientWhereInput[] = [
+      { tenantId: req.tenantId }
+    ];
 
     if (search) {
       const sanitized = search.trim();
@@ -56,7 +62,7 @@ router.get('/', authorize('admin', 'operator', 'viewer'), async (req, res, next)
       });
     }
 
-    const where: Prisma.ClientWhereInput = conditions.length > 0 ? { AND: conditions } : {};
+    const where: Prisma.ClientWhereInput = conditions.length === 1 ? conditions[0] : { AND: conditions };
 
     const [total, clients] = await prisma.$transaction([
       prisma.client.count({ where }),
@@ -80,9 +86,16 @@ router.post('/', authorize('admin', 'operator'), async (req, res, next) => {
     const payload = createClientSchema.parse(req.body);
     const document = normalizeDocument(payload.document);
 
+    if (!req.tenantId) {
+      throw createHttpError(403, 'Tenant ID não encontrado');
+    }
+
+    const tenantId = req.tenantId;
+
     const client = await prisma.$transaction(async (tx) => {
       const created = await tx.client.create({
         data: {
+          tenantId,
           name: `${payload.firstName} ${payload.lastName}`.trim(),
           firstName: payload.firstName,
           lastName: payload.lastName,

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 
 interface Client {
   id: string;
@@ -60,6 +62,7 @@ const statusStyle: Record<Loan['status'], { bg: string; label: string }> = {
 
 const LoansPage = () => {
   const { user } = useAuth();
+  const { showBalance } = useBalanceVisibility();
   const canManageLoans = user?.role === 'admin' || user?.role === 'operator';
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -192,7 +195,7 @@ const LoansPage = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
-                          {currency.format(Number(loan.principalAmount))}
+                          {formatCurrencyWithPrivacy(Number(loan.principalAmount), showBalance)}
                         </td>
                         <td className="px-4 py-3 text-slate-500 dark:text-slate-300">
                           {Number(loan.interestRate).toFixed(2)}%

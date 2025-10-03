@@ -38,7 +38,7 @@ const buildAuthUserResponse = (user: {
   firstName: string | null;
   lastName: string | null;
   phone: string | null;
-  role: 'admin' | 'operator' | 'viewer';
+  role: 'super_admin' | 'admin' | 'operator' | 'viewer';
   avatar: string | null;
 }) => ({
   id: user.id,
@@ -53,11 +53,74 @@ const buildAuthUserResponse = (user: {
 
 const login = async (email: string, password: string) => {
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
+      avatar: true,
+      passwordHash: true
+    }
   });
 
   if (!user) {
     throw createHttpError(401, 'Invalid email or password');
+  }
+
+  const valid = await comparePassword(password, user.passwordHash);
+
+  if (!valid) {
+    throw createHttpError(401, 'Invalid email or password');
+  }
+
+  const accessToken = signToken(
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role
+    },
+    ACCESS_TOKEN_EXPIRATION
+  );
+
+  const { token: refreshToken, expiresAt: refreshTokenExpiresAt } = await issueRefreshToken(user.id, {
+    invalidateExisting: true
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    refreshTokenExpiresAt,
+    user: buildAuthUserResponse(user)
+  };
+};
+
+const loginSuperAdmin = async (email: string, password: string) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
+      avatar: true,
+      passwordHash: true
+    }
+  });
+
+  if (!user) {
+    throw createHttpError(401, 'Invalid email or password');
+  }
+
+  // Verificar se é super admin
+  if (user.role !== 'super_admin') {
+    throw createHttpError(403, 'Acesso negado. Apenas Super Admin.');
   }
 
   const valid = await comparePassword(password, user.passwordHash);
@@ -121,7 +184,19 @@ const refreshSession = async (refreshToken: string) => {
     throw createHttpError(401, 'Refresh token inválido ou expirado');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: storedToken.userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: storedToken.userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      role: true,
+      avatar: true
+    }
+  });
 
   if (!user) {
     throw createHttpError(401, 'Usuário não encontrado');
@@ -231,6 +306,7 @@ const resetPassword = async (token: string, newPassword: string) => {
 
 export const authService = {
   login,
+  loginSuperAdmin,
   getCurrentUser,
   refreshSession,
   logout,
