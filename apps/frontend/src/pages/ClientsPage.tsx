@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import ClientForm, {
@@ -8,6 +8,23 @@ import ClientForm, {
 } from '../components/forms/ClientForm';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+
+// Hook para debounce
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
 
 interface Address {
   id: string;
@@ -126,7 +143,6 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const ClientsPage = () => {
   const queryClient = useQueryClient();
-  const [searchTerm, setSearchTerm] = useState('');
   const [pendingSearch, setPendingSearch] = useState('');
   const [filters, setFilters] = useState({ name: '', city: '', district: '' });
   const [pendingFilters, setPendingFilters] = useState(filters);
@@ -134,8 +150,13 @@ const ClientsPage = () => {
   const [pageSize, setPageSize] = useState(10);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [showNewClientForm, setShowNewClientForm] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const { user } = useAuth();
   const canManageClients = user?.role === 'admin' || user?.role === 'operator';
+
+  // Debounce de 3 segundos na busca
+  const searchTerm = useDebounce(pendingSearch, 3000);
 
   const { data, isLoading, isFetching } = useQuery<ClientsResponse>({
     queryKey: ['clients', { searchTerm, filters, page, pageSize }],
@@ -213,11 +234,7 @@ const ClientsPage = () => {
     setFeedback(null);
     setErrorMessage(null);
     await createClient.mutateAsync(values);
-  };
-
-  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSearchTerm(pendingSearch.trim());
+    setShowNewClientForm(false);
   };
 
   const handleFiltersSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -298,15 +315,81 @@ const ClientsPage = () => {
   };
 
   return (
-    <div className="space-y-10">
-      {canManageClients ? (
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Cadastrar cliente</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Utilize o formulário abaixo para cadastrar um novo cliente e os endereços principal e comercial.
+    <div className="space-y-6">
+      {/* Header with Search and New Client Button */}
+      <section className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Clientes</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Gerencie os clientes cadastrados no sistema
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <input
+              type="search"
+              placeholder="Buscar por nome, documento, e-mail ou telefone..."
+              value={pendingSearch}
+              onChange={(event) => setPendingSearch(event.target.value)}
+              className="w-80 rounded-xl border border-slate-300 bg-white px-4 py-2 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            {pendingSearch && pendingSearch !== searchTerm && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            <span className="flex items-center gap-2">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Filtros
+              {(filters.name || filters.city || filters.district) && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">
+                  {[filters.name, filters.city, filters.district].filter(Boolean).length}
+                </span>
+              )}
+            </span>
+          </button>
+          {canManageClients && (
+            <button
+              onClick={() => setShowNewClientForm(!showNewClientForm)}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              + Novo Cliente
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Inline New Client Form */}
+      {canManageClients && showNewClientForm && (
+        <section className="rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm transition dark:border-emerald-500/40 dark:bg-slate-900">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-emerald-700 dark:text-emerald-300">Novo Cliente</h2>
+              <p className="mt-1 text-sm text-emerald-700/80 dark:text-emerald-200/80">
+                Preencha os dados abaixo para cadastrar um novo cliente
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNewClientForm(false)}
+              className="rounded-xl border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:border-emerald-500/60 dark:text-emerald-200 dark:hover:bg-emerald-500/10"
+            >
+              Cancelar
+            </button>
+          </div>
           <div className="mt-6 space-y-4">
-            <ClientForm onSubmit={handleCreate} isSubmitting={createClient.isPending} />
+            <ClientForm
+              onSubmit={handleCreate}
+              isSubmitting={createClient.isPending}
+              onCancel={() => setShowNewClientForm(false)}
+            />
             {feedback && (
               <p className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-600 dark:bg-green-500/10 dark:text-green-300">
                 {feedback}
@@ -319,15 +402,9 @@ const ClientsPage = () => {
             )}
           </div>
         </section>
-      ) : (
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Clientes</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Você possui acesso somente leitura aos cadastros de clientes. Contate um administrador para solicitar permissões adicionais.
-          </p>
-        </section>
       )}
 
+      {/* Edit Client Form */}
       {canManageClients && editingClient && editingDefaults && (
         <section className="rounded-3xl border border-amber-200 bg-white p-6 shadow-sm transition dark:border-amber-500/40 dark:bg-slate-900">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -358,71 +435,87 @@ const ClientsPage = () => {
         </section>
       )}
 
-      <section className="space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Clientes cadastrados</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Utilize a busca global ou os filtros para encontrar um cliente. Resultados paginados em tempo real.
-            </p>
+      {/* Filters Modal Overlay */}
+      {showFilters && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-20" onClick={() => setShowFilters(false)}>
+          <div className="mx-4 w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Filtros de pesquisa</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowFilters(false)}
+                  className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  handleFiltersSubmit(e);
+                  setShowFilters(false);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Nome</label>
+                  <input
+                    type="text"
+                    value={pendingFilters.name}
+                    onChange={(event) => setPendingFilters((prev) => ({ ...prev, name: event.target.value }))}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    placeholder="Filtrar por nome"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Bairro</label>
+                  <input
+                    type="text"
+                    value={pendingFilters.district}
+                    onChange={(event) => setPendingFilters((prev) => ({ ...prev, district: event.target.value }))}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    placeholder="Filtrar por bairro"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">Cidade</label>
+                  <input
+                    type="text"
+                    value={pendingFilters.city}
+                    onChange={(event) => setPendingFilters((prev) => ({ ...prev, city: event.target.value }))}
+                    className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    placeholder="Filtrar por cidade"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingFilters({ name: '', city: '', district: '' });
+                      setFilters({ name: '', city: '', district: '' });
+                      setShowFilters(false);
+                    }}
+                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  >
+                    Limpar filtros
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    Aplicar filtros
+                  </button>
+                </div>
+              </form>
+            </section>
           </div>
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
-            <input
-              type="search"
-              placeholder="Busca global (nome, documento, e-mail, telefone)"
-              value={pendingSearch}
-              onChange={(event) => setPendingSearch(event.target.value)}
-              className="w-72 rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-            />
-            <button
-              type="submit"
-              className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              Buscar
-            </button>
-          </form>
-        </header>
+        </div>
+      )}
 
-        <form
-          onSubmit={handleFiltersSubmit}
-          className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:grid-cols-4"
-        >
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Nome</label>
-            <input
-              type="text"
-              value={pendingFilters.name}
-              onChange={(event) => setPendingFilters((prev) => ({ ...prev, name: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Bairro</label>
-            <input
-              type="text"
-              value={pendingFilters.district}
-              onChange={(event) => setPendingFilters((prev) => ({ ...prev, district: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cidade</label>
-            <input
-              type="text"
-              value={pendingFilters.city}
-              onChange={(event) => setPendingFilters((prev) => ({ ...prev, city: event.target.value }))}
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            />
-          </div>
-          <div className="flex items-end justify-end">
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600"
-            >
-              Aplicar filtros
-            </button>
-          </div>
-        </form>
+      {/* Clients Table */}
+      <section className="space-y-6">
 
         <div className="rounded-3xl border border-slate-200 bg-white shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
