@@ -24,6 +24,7 @@
     "react-input-mask": "^3.0.0-alpha.2",
     "react-number-format": "^5.3.3",
     "react-router-dom": "^6.23.0",
+    "recharts": "^3.2.1",
     "yup": "^1.4.0"
   },
   "devDependencies": {

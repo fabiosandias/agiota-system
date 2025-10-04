@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
 import { formatCurrencyWithPrivacy } from '../utils/currency';
+import LatestTransactions from '../components/dashboard/LatestTransactions';
+import AccountBalanceCard from '../components/dashboard/AccountBalanceCard';
+import AccountEvolutionChart from '../components/dashboard/AccountEvolutionChart';
+import PageHeader from '../components/PageHeader';
 
 interface LoanSummary {
   id: string;
@@ -43,7 +47,9 @@ const DashboardPage = () => {
   const availableBalance = accounts.reduce((acc, account) => acc + Number(account.currentBalance), 0);
 
   return (
-    <>
+    <div className="space-y-6">
+      <PageHeader title="Dashboard" showBackButton={false} />
+
       <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
           <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Empréstimos ativos</span>
@@ -71,38 +77,37 @@ const DashboardPage = () => {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Movimentação de caixa</h2>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          Total liberado em empréstimos: {loadingLoans ? '...' : formatCurrencyWithPrivacy(totalPrincipal, showBalance)}
-        </p>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Esse painel exibirá gráficos assim que as transações estiverem disponíveis na API.
-        </p>
-      </section>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Contas
-          <span className="ml-2 text-xs font-medium text-slate-400 dark:text-slate-500">Saldo consolidado</span>
-        </h2>
-        <div className="mt-4 space-y-3">
-          {loadingAccounts ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Carregando contas...</p>
-          ) : accounts.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma conta cadastrada.</p>
-          ) : (
-            accounts.map((account) => (
-              <div key={account.id} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3 text-sm transition dark:border-slate-700 dark:bg-slate-950/50">
-                <span className="font-medium text-slate-600 dark:text-slate-300">{account.name}</span>
-                <span className="text-slate-900 dark:text-slate-100">
-                  {formatCurrencyWithPrivacy(Number(account.currentBalance), showBalance)}
-                </span>
-              </div>
-            ))
-          )}
+      {/* Grid com Account Balance e Latest Transactions */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        <AccountBalanceCard />
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Resumo Financeiro</h2>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            Total liberado em empréstimos: {loadingLoans ? '...' : formatCurrencyWithPrivacy(totalPrincipal, showBalance)}
+          </p>
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total de Contas</p>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                {loadingAccounts ? '...' : accounts.length}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Empréstimos</p>
+              <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-slate-100">
+                {loadingLoans ? '...' : loans.length}
+              </p>
+            </div>
+          </div>
         </div>
       </section>
-    </>
+
+      {/* Gráfico de Evolução */}
+      <AccountEvolutionChart />
+
+      {/* Últimas Transações */}
+      <LatestTransactions />
+    </div>
   );
 };
 

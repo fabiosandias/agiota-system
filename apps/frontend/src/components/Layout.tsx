@@ -145,6 +145,9 @@ const Layout = ({ children }: PropsWithChildren) => {
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const { showBalance, toggleBalance } = useBalanceVisibility();
   const userSidebarRef = useRef<HTMLDivElement | null>(null);
   const aiChatRef = useRef<HTMLDivElement | null>(null);
@@ -170,6 +173,29 @@ const Layout = ({ children }: PropsWithChildren) => {
 
   const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const balance = balanceData?.data?.balance ?? 0;
+
+  // Debounce para busca
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (searchQuery.trim().length >= 2) {
+        setIsSearching(true);
+        try {
+          const response = await api.get(`/v1/clients/search?q=${encodeURIComponent(searchQuery)}`);
+          setSearchResults(response.data.data || []);
+          setShowSearchResults(true);
+        } catch (error) {
+          setSearchResults([]);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+        setShowSearchResults(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
 
   const toggleSidebar = () => {
     const newValue = !isSidebarCollapsed;
@@ -229,7 +255,7 @@ const Layout = ({ children }: PropsWithChildren) => {
       <div className="flex min-h-screen">
         {/* Sidebar desktop */}
         <aside
-          className={`hidden flex-col border-r border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 md:flex transition-all duration-300 ${
+          className={`hidden flex-col border-r border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 md:flex transition-all duration-300 fixed left-0 top-0 bottom-0 h-screen z-40 overflow-hidden ${
             isSidebarCollapsed ? 'w-[72px]' : 'w-[280px]'
           }`}
         >
@@ -389,11 +415,13 @@ const Layout = ({ children }: PropsWithChildren) => {
           </div>
         )}
 
-        <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
-            <div className="flex h-16 items-center justify-between gap-4 px-4 md:px-8">
-              {/* Left: Collapse button + Breadcrumb */}
-              <div className="flex items-center gap-3 min-w-0">
+        <div className={`flex flex-1 flex-col transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-[72px]' : 'md:ml-[280px]'}`}>
+          <header className={`fixed top-0 right-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80 transition-all duration-300 ${
+            isSidebarCollapsed ? 'left-0 md:left-[72px]' : 'left-0 md:left-[280px]'
+          }`}>
+            <div className="flex h-16 items-center gap-4 px-4 md:px-8">
+              {/* Left: Menu buttons */}
+              <div className="flex items-center gap-3 flex-shrink-0">
                 {/* Collapse button - desktop only */}
                 <button
                   type="button"
@@ -421,39 +449,11 @@ const Layout = ({ children }: PropsWithChildren) => {
                     <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-
-                {/* Breadcrumb */}
-                <nav className="hidden md:flex items-center gap-2 text-sm min-w-0" aria-label="Breadcrumb">
-                  {currentPageInfo.breadcrumb.map((crumb, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      {index > 0 && (
-                        <svg
-                          className="h-4 w-4 text-slate-400 flex-shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      )}
-                      {crumb.to ? (
-                        <Link
-                          to={crumb.to}
-                          className="text-slate-600 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 transition truncate"
-                        >
-                          {crumb.label}
-                        </Link>
-                      ) : (
-                        <span className="text-slate-900 font-medium dark:text-slate-100 truncate">{crumb.label}</span>
-                      )}
-                    </div>
-                  ))}
-                </nav>
               </div>
 
               {/* Center: Search bar */}
-              <div className="hidden lg:flex flex-1 max-w-md">
-                <div className="relative w-full">
+              <div className="hidden lg:flex flex-1 justify-center">
+                <div className="relative w-full max-w-lg">
                   <svg
                     className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                     fill="none"
@@ -472,13 +472,100 @@ const Layout = ({ children }: PropsWithChildren) => {
                     placeholder="Buscar..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => searchQuery.trim().length >= 2 && setShowSearchResults(true)}
+                    onBlur={() => setTimeout(() => setShowSearchResults(false), 200)}
                     className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-400 dark:focus:ring-blue-400/20"
                   />
+
+                  {/* Search Results Dropdown */}
+                  {showSearchResults && (
+                    <div className="absolute top-full mt-2 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                      {isSearching ? (
+                        <div className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                          <svg
+                            className="animate-spin h-6 w-6 mx-auto mb-2 text-blue-500"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                          <p className="text-sm">Buscando...</p>
+                        </div>
+                      ) : searchResults.length > 0 ? (
+                        <div className="py-2">
+                          {searchResults.map((client) => (
+                            <Link
+                              key={client.id}
+                              to={`/clients/${client.id}`}
+                              className="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition border-b border-slate-100 dark:border-slate-700 last:border-b-0"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-slate-900 dark:text-slate-100">
+                                    {client.name}
+                                  </p>
+                                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    {client.documentType === 'CPF' ? 'CPF' : 'CNPJ'}:{' '}
+                                    {client.document?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                                  </p>
+                                  {client.address && (
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                                      {client.address.district}, {client.address.city}/{client.address.state}
+                                    </p>
+                                  )}
+                                </div>
+                                {client.lastLoan && (
+                                  <div className="ml-4 text-right">
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">Último empréstimo</p>
+                                    <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                      {new Intl.NumberFormat('pt-BR', {
+                                        style: 'currency',
+                                        currency: 'BRL'
+                                      }).format(client.lastLoan.amount)}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                          <svg
+                            className="h-12 w-12 mx-auto mb-2 text-slate-300 dark:text-slate-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M12 12h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <p className="text-sm">Nenhum cliente encontrado</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Right: Balance + AI + Theme + Avatar */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-shrink-0">
                 {/* Balance */}
                 <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Saldo total:</span>
@@ -558,15 +645,8 @@ const Layout = ({ children }: PropsWithChildren) => {
             </div>
           </header>
 
-          {/* Page Title */}
-          <div className="border-b border-slate-200 bg-white/50 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/50 md:px-8 md:py-6">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 md:text-3xl">
-              {currentPageInfo.title}
-            </h1>
-          </div>
-
-          <main className="flex-1 px-4 py-8 md:px-10 md:py-12">
-            <div className="mx-auto max-w-6xl space-y-8">{children}</div>
+          <main className="flex-1 px-4 py-8 md:px-10 md:py-12 mt-16">
+            <div className="mx-auto max-w-6xl">{children}</div>
           </main>
         </div>
       </div>
@@ -638,24 +718,23 @@ const Layout = ({ children }: PropsWithChildren) => {
                   </svg>
                   <span className="font-medium">Minha assinatura</span>
                 </Link>
-                <button
-                  disabled
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-400 cursor-not-allowed relative group"
-                  title="Em breve"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                    />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="font-medium">Configurações</span>
-                  <span className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition whitespace-nowrap">
-                    Em breve
-                  </span>
-                </button>
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/settings"
+                    onClick={() => setIsUserSidebarOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="font-medium">Configurações</span>
+                  </Link>
+                )}
                 <hr className="my-4 border-slate-200 dark:border-slate-800" />
                 <button
                   type="button"

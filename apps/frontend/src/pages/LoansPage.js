@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { formatCurrencyWithPrivacy } from '../utils/currency';
 const statusStyle = {
     active: { bg: 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300', label: 'Ativo' },
     due_soon: { bg: 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300', label: 'Vence em breve' },
@@ -13,6 +15,7 @@ const statusStyle = {
 };
 const LoansPage = () => {
     const { user } = useAuth();
+    const { showBalance } = useBalanceVisibility();
     const canManageLoans = user?.role === 'admin' || user?.role === 'operator';
     const [searchTerm, setSearchTerm] = useState('');
     const [pendingSearch, setPendingSearch] = useState('');
@@ -49,7 +52,7 @@ const LoansPage = () => {
                                                 : 'Nenhum empréstimo cadastrado até o momento.' }) })) : (loans.map((loan) => {
                                         const paidInstallments = loan.installments.filter((i) => i.status === 'paid').length;
                                         const totalInstallments = loan.installments.length;
-                                        return (_jsxs("tr", { className: "bg-white transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/50", children: [_jsxs("td", { className: "px-4 py-3 text-slate-700 dark:text-slate-200", children: [_jsx("div", { className: "font-medium", children: loan.client.name }), loan.client.document && (_jsx("span", { className: "text-xs text-slate-400 dark:text-slate-500", children: loan.client.document }))] }), _jsx("td", { className: "px-4 py-3 font-medium text-slate-700 dark:text-slate-200", children: currency.format(Number(loan.principalAmount)) }), _jsxs("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: [Number(loan.interestRate).toFixed(2), "%"] }), _jsxs("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: [paidInstallments, "/", totalInstallments] }), _jsx("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: new Date(loan.dueDate).toLocaleDateString('pt-BR') }), _jsx("td", { className: "px-4 py-3", children: _jsx("span", { className: `inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle[loan.status].bg}`, children: statusStyle[loan.status].label }) })] }, loan.id));
+                                        return (_jsxs("tr", { className: "bg-white transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/50", children: [_jsxs("td", { className: "px-4 py-3 text-slate-700 dark:text-slate-200", children: [_jsx("div", { className: "font-medium", children: loan.client.name }), loan.client.document && (_jsx("span", { className: "text-xs text-slate-400 dark:text-slate-500", children: loan.client.document }))] }), _jsx("td", { className: "px-4 py-3 font-medium text-slate-700 dark:text-slate-200", children: formatCurrencyWithPrivacy(Number(loan.principalAmount), showBalance) }), _jsxs("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: [Number(loan.interestRate).toFixed(2), "%"] }), _jsxs("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: [paidInstallments, "/", totalInstallments] }), _jsx("td", { className: "px-4 py-3 text-slate-500 dark:text-slate-300", children: new Date(loan.dueDate).toLocaleDateString('pt-BR') }), _jsx("td", { className: "px-4 py-3", children: _jsx("span", { className: `inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusStyle[loan.status].bg}`, children: statusStyle[loan.status].label }) })] }, loan.id));
                                     })) })] }) }) }), meta && meta.totalPages > 1 && (_jsxs("div", { className: "mt-6 flex items-center justify-between", children: [_jsxs("p", { className: "text-sm text-slate-500 dark:text-slate-400", children: ["Mostrando ", (meta.page - 1) * meta.pageSize + 1, " a ", Math.min(meta.page * meta.pageSize, meta.total), " de ", meta.total, " empr\u00E9stimos"] }), _jsxs("div", { className: "flex gap-2", children: [_jsx("button", { onClick: () => setPage((p) => Math.max(1, p - 1)), disabled: page === 1, className: "rounded-lg border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800", children: "Anterior" }), _jsxs("span", { className: "flex items-center px-3 text-sm text-slate-600 dark:text-slate-300", children: ["P\u00E1gina ", meta.page, " de ", meta.totalPages] }), _jsx("button", { onClick: () => setPage((p) => Math.min(meta.totalPages, p + 1)), disabled: page === meta.totalPages, className: "rounded-lg border border-slate-300 px-3 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800", children: "Pr\u00F3xima" })] })] }))] }) }));
 };
 export default LoansPage;

@@ -8,6 +8,9 @@ import ClientForm, {
 } from '../components/forms/ClientForm';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import ConfirmDialog from '../components/ConfirmDialog';
+import PageHeader from '../components/PageHeader';
 
 // Hook para debounce
 function useDebounce<T>(value: T, delay: number): T {
@@ -143,20 +146,21 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const ClientsPage = () => {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [pendingSearch, setPendingSearch] = useState('');
   const [filters, setFilters] = useState({ name: '', city: '', district: '' });
   const [pendingFilters, setPendingFilters] = useState(filters);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
   const [showNewClientForm, setShowNewClientForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const { user } = useAuth();
   const canManageClients = user?.role === 'admin' || user?.role === 'operator';
 
-  // Debounce de 3 segundos na busca
-  const searchTerm = useDebounce(pendingSearch, 3000);
+  // Debounce de 300ms na busca
+  const searchTerm = useDebounce(pendingSearch, 300);
 
   const { data, isLoading, isFetching } = useQuery<ClientsResponse>({
     queryKey: ['clients', { searchTerm, filters, page, pageSize }],
@@ -201,11 +205,13 @@ const ClientsPage = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['clients'] });
+      showToast('success', 'Cliente cadastrado com sucesso!');
       setFeedback('Cliente cadastrado com sucesso.');
       setErrorMessage(null);
       setPage(1);
     },
     onError: () => {
+      showToast('error', 'Não foi possível cadastrar o cliente. Verifique os dados informados.');
       setErrorMessage('Não foi possível cadastrar o cliente. Verifique os dados informados.');
       setFeedback(null);
     }
@@ -218,6 +224,10 @@ const ClientsPage = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['clients'] });
+      showToast('success', 'Cliente atualizado com sucesso!');
+    },
+    onError: () => {
+      showToast('error', 'Não foi possível atualizar o cliente.');
     }
   });
 
@@ -227,6 +237,10 @@ const ClientsPage = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['clients'] });
+      showToast('success', 'Cliente removido com sucesso!');
+    },
+    onError: () => {
+      showToast('error', 'Não foi possível remover o cliente.');
     }
   });
 
@@ -283,22 +297,18 @@ const ClientsPage = () => {
     }
   };
 
-  const handleDelete = async (client: Client) => {
+  const handleDeleteClick = (client: Client) => {
     if (!canManageClients) return;
-    const confirmDelete =
-      typeof window !== 'undefined' && window.confirm(`Deseja realmente excluir o cliente "${client.name}"?`);
-    if (!confirmDelete) {
-      return;
-    }
+    setDeletingClient(client);
+  };
 
-    setFeedback(null);
-    setErrorMessage(null);
-    setDeletingClientId(client.id);
+  const handleDeleteConfirm = async () => {
+    if (!deletingClient) return;
 
     try {
-      await deleteClientMutation.mutateAsync(client.id);
-      setFeedback('Cliente removido com sucesso.');
-      if (editingClient?.id === client.id) {
+      await deleteClientMutation.mutateAsync(deletingClient.id);
+      showToast('success', 'Cliente removido com sucesso');
+      if (editingClient?.id === deletingClient.id) {
         setEditingClient(null);
       }
       setPage((prev) => {
@@ -308,22 +318,18 @@ const ClientsPage = () => {
         return prev;
       });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, 'Não foi possível remover o cliente.'));
+      showToast('error', getErrorMessage(error, 'Não foi possível remover o cliente'));
     } finally {
-      setDeletingClientId(null);
+      setDeletingClient(null);
     }
   };
 
   return (
     <div className="space-y-6">
+      <PageHeader title="Clientes" showBackButton={false} />
+
       {/* Header with Search and New Client Button */}
       <section className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Clientes</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Gerencie os clientes cadastrados no sistema
-          </p>
-        </div>
         <div className="flex items-center gap-3">
           <div className="relative">
             <input
@@ -593,11 +599,11 @@ const ClientsPage = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => void handleDelete(client)}
+                                onClick={() => void handleDeleteClick(client)}
                                 className="rounded-lg border border-red-400 px-3 py-1 text-xs font-semibold text-red-500 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-400 dark:text-red-300 dark:hover:bg-red-500/10"
-                                disabled={deletingClientId === client.id && deleteClientMutation.isPending}
+                                disabled={deleteClientMutation.isPending}
                               >
-                                {deletingClientId === client.id && deleteClientMutation.isPending ? 'Excluindo...' : 'Excluir'}
+                                Excluir
                               </button>
                             </div>
                           ) : (
@@ -635,6 +641,18 @@ const ClientsPage = () => {
           </div>
         </div>
       </section>
+
+      {/* Confirm Delete Dialog */}
+      <ConfirmDialog
+        isOpen={!!deletingClient}
+        title="Excluir Cliente"
+        message={`Tem certeza que deseja excluir o cliente "${deletingClient?.name}"? Esta ação não pode ser desfeita.`}
+        confirmText="Sim, excluir"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeletingClient(null)}
+      />
     </div>
   );
 };

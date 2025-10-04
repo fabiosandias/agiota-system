@@ -4,12 +4,15 @@ import LoginPage from '../pages/LoginPage';
 import LoansPage from '../pages/LoansPage';
 import NewLoanPage from '../pages/NewLoanPage';
 import ClientsPage from '../pages/ClientsPage';
+import ClientDetailPage from '../pages/ClientDetailPage';
 import DepositPage from '../pages/DepositPage';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import ProfilePage from '../pages/ProfilePage';
 import UsersPage from '../pages/UsersPage';
 import AccountsPage from '../pages/AccountsPage';
+import TransactionsPage from '../pages/TransactionsPage';
+import SettingsPage from '../pages/SettingsPage';
 import LoadingScreen from '../components/LoadingScreen';
 import Layout from '../components/Layout';
 import RoleGuard from '../components/RoleGuard';
@@ -117,6 +120,15 @@ const AppRoutes = () => {
           )
         },
         { path: '/clients', element: <ClientsPage /> },
+        { path: '/clients/:id', element: <ClientDetailPage /> },
+        {
+          path: '/transactions',
+          element: (
+            <RoleGuard allowedRoles={['admin', 'viewer']}>
+              <TransactionsPage />
+            </RoleGuard>
+          )
+        },
         {
           path: '/accounts',
           element: (
@@ -138,6 +150,14 @@ const AppRoutes = () => {
           element: (
             <RoleGuard allowedRoles={['admin']}>
               <UsersPage />
+            </RoleGuard>
+          )
+        },
+        {
+          path: '/settings',
+          element: (
+            <RoleGuard allowedRoles={['admin']}>
+              <SettingsPage />
             </RoleGuard>
           )
         },

@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { api, setUnauthorizedHandler, setToken, removeToken, getToken } from '../lib/api';
 const AuthContext = createContext(undefined);
 const THEME_STORAGE_KEY = 'aitron-financeira.theme';
+const SESSION_START_KEY = 'aitron-financeira.session-start';
+const LAST_ACTIVITY_KEY = 'aitron-financeira.last-activity';
+const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutos
+const ABSOLUTE_TIMEOUT = 8 * 60 * 60 * 1000; // 8 horas
 const resolveInitialTheme = () => {
     if (typeof window === 'undefined')
         return 'light';
@@ -51,6 +55,16 @@ export const AuthProvider = ({ children }) => {
             try {
                 const { data } = await api.get('/auth/me');
                 setUser(data.data);
+                // Restaurar timestamps de sessão se não existirem
+                const sessionStart = localStorage.getItem(SESSION_START_KEY);
+                const lastActivity = localStorage.getItem(LAST_ACTIVITY_KEY);
+                const now = Date.now();
+                if (!sessionStart) {
+                    localStorage.setItem(SESSION_START_KEY, now.toString());
+                }
+                if (!lastActivity) {
+                    localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
+                }
             }
             catch (error) {
                 setUser(null);
@@ -62,12 +76,57 @@ export const AuthProvider = ({ children }) => {
         };
         void loadProfile();
     }, []);
+    // Gerenciamento de sessão: verificar timeout
+    useEffect(() => {
+        if (!user)
+            return;
+        const checkSession = () => {
+            const sessionStart = parseInt(localStorage.getItem(SESSION_START_KEY) || '0', 10);
+            const lastActivity = parseInt(localStorage.getItem(LAST_ACTIVITY_KEY) || '0', 10);
+            const now = Date.now();
+            // Verificar timeout absoluto (8h)
+            if (now - sessionStart > ABSOLUTE_TIMEOUT) {
+                signOut();
+                return;
+            }
+            // Verificar idle timeout (30min)
+            if (now - lastActivity > IDLE_TIMEOUT) {
+                signOut();
+                return;
+            }
+        };
+        const interval = setInterval(checkSession, 60000); // Verificar a cada 1 minuto
+        return () => clearInterval(interval);
+    }, [user]);
+    // Atualizar lastActivity em eventos de usuário
+    useEffect(() => {
+        if (!user)
+            return;
+        const updateActivity = () => {
+            localStorage.setItem(LAST_ACTIVITY_KEY, Date.now().toString());
+        };
+        // Eventos que resetam idle timeout
+        window.addEventListener('mousedown', updateActivity);
+        window.addEventListener('keydown', updateActivity);
+        window.addEventListener('scroll', updateActivity);
+        window.addEventListener('touchstart', updateActivity);
+        return () => {
+            window.removeEventListener('mousedown', updateActivity);
+            window.removeEventListener('keydown', updateActivity);
+            window.removeEventListener('scroll', updateActivity);
+            window.removeEventListener('touchstart', updateActivity);
+        };
+    }, [user]);
     const signIn = async (input) => {
         setIsAuthenticating(true);
         try {
             const { data } = await api.post('/auth/login', input);
             setToken(data.token);
             setUser(data.user);
+            // Iniciar sessão
+            const now = Date.now();
+            localStorage.setItem(SESSION_START_KEY, now.toString());
+            localStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
         }
         finally {
             setIsAuthenticating(false);
@@ -83,6 +142,8 @@ export const AuthProvider = ({ children }) => {
         finally {
             removeToken();
             setUser(null);
+            localStorage.removeItem(SESSION_START_KEY);
+            localStorage.removeItem(LAST_ACTIVITY_KEY);
             navigate('/login');
         }
     };

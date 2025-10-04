@@ -47,7 +47,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       const response = await api.post('/admin/auth/login', { email, password });
 
-      const { token: newToken, user: userData } = response.data;
+      const { token: newToken, refreshToken: newRefreshToken, user: userData } = response.data;
 
       // Verificar se realmente é super admin
       if (userData.role !== 'super_admin') {
@@ -58,6 +58,7 @@ export const AdminAuthProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setUser(userData);
 
       localStorage.setItem('@AitronAdmin:token', newToken);
+      localStorage.setItem('@AitronAdmin:refreshToken', newRefreshToken);
       localStorage.setItem('@AitronAdmin:user', JSON.stringify(userData));
 
       api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
